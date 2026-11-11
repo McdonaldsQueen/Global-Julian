@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>参会名单整理工具</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#f1f5fb; --card:#ffffff; --border:#e5eaf2; --text:#0f172a; --muted:#64748b;
+    --primary:#4f46e5; --primary-dark:#4338ca; --ok:#059669; --warn:#d97706; --danger:#dc2626;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--text);line-height:1.6;
+    background:linear-gradient(160deg,#eef4ff 0%,#f7f0ff 42%,#eefcf5 100%);background-attachment:fixed;min-height:100vh;}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px 20px 60px;}
+  .hero{padding:14px 6px 6px;}
+  h1{font-size:27px;margin:6px 0 8px;font-weight:800;letter-spacing:.5px;
+    background:linear-gradient(90deg,#4f46e5,#9333ea 55%,#0ea5e9);-webkit-background-clip:text;background-clip:text;color:transparent;display:inline-block;}
+  .sub{color:var(--muted);font-size:14px;margin-bottom:22px;max-width:760px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:22px;margin-bottom:16px;
+    box-shadow:0 1px 2px rgba(15,23,42,.04),0 10px 28px rgba(79,70,229,.06);}
+  .dropzone{border:2px dashed #b9c5d8;border-radius:14px;padding:44px 24px;text-align:center;color:var(--muted);cursor:pointer;transition:.25s;
+    background:linear-gradient(180deg,#fafcff,#f3f6ff);}
+  .dropzone:hover,.dropzone.hover{border-color:var(--primary);background:#eef2ff;color:var(--primary);transform:translateY(-2px);
+    box-shadow:0 10px 26px rgba(79,70,229,.14);}
+  .dropzone b{color:var(--primary);}
+  .opts{display:flex;flex-wrap:wrap;gap:10px 24px;margin-top:16px;}
+  .opts label{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text);cursor:pointer;
+    background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:6px 12px;transition:.15s;}
+  .opts label:hover{border-color:#c7d2fe;background:#eef2ff;}
+  .opts input{accent-color:var(--primary);}
+  .btn{display:inline-block;background:linear-gradient(135deg,#4f46e5,#6d28d9);color:#fff;border:none;border-radius:10px;
+    padding:11px 24px;font-size:15px;font-weight:600;cursor:pointer;margin-right:10px;transition:.2s;
+    box-shadow:0 4px 14px rgba(79,70,229,.28);}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(79,70,229,.36);}
+  .btn:disabled{background:#9db4d8;cursor:not-allowed;box-shadow:none;}
+  .btn.secondary{background:#fff;color:var(--primary);border:1px solid #c7d2fe;box-shadow:none;}
+  .btn.secondary:hover{background:#eef2ff;transform:none;box-shadow:none;}
+  .status{margin-top:12px;font-size:14px;color:var(--muted);min-height:20px;}
+  .status.err{color:var(--danger);}
+  h2{font-size:17px;margin:0 0 12px;}
+  table{border-collapse:collapse;width:100%;font-size:13px;}
+  th,td{border:1px solid var(--border);padding:6px 8px;text-align:left;vertical-align:top;}
+  th{background:#f1f5f9;position:sticky;top:0;}
+  .tblwrap{max-height:480px;overflow:auto;border-radius:8px;}
+  .review-item{font-size:13px;padding:6px 10px;border-left:3px solid var(--warn);background:#fffbeb;margin-bottom:6px;border-radius:0 6px 6px 0;}
+  .review-item b{color:var(--warn);}
+  .rules{font-size:13px;color:var(--muted);}
+  .rules li{margin-bottom:6px;}
+  .group-list{font-size:13px;}
+  .group-item{padding:8px 10px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:baseline;}
+  .group-item:last-child{border-bottom:none;}
+  .group-brand{font-weight:700;color:var(--primary);min-width:120px;}
+  .group-ents{color:var(--muted);}
+  .pill{display:inline-block;background:#eef2ff;color:var(--primary);border-radius:99px;padding:1px 10px;font-size:12px;margin-left:6px;}
+  .hidden{display:none;}
+  code{background:#f1f5f9;border-radius:4px;padding:1px 6px;font-size:12px;}
+
+  /* ---- 统计卡片 ---- */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}
+  .stat{position:relative;background:linear-gradient(180deg,#ffffff,#f8faff);border:1px solid var(--border);border-radius:12px;
+    padding:14px 16px;overflow:hidden;transition:.2s;}
+  .stat:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(79,70,229,.12);}
+  .stat::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,#4f46e5,#9333ea);border-radius:4px 0 0 4px;}
+  .stat .num{font-size:24px;font-weight:800;color:var(--primary);font-variant-numeric:tabular-nums;}
+  .stat .lbl{font-size:12px;color:var(--muted);margin-top:2px;}
+  .stat.foreign::before{background:linear-gradient(180deg,#f59e0b,#ef4444);}
+  .stat.foreign .num{color:#d97706;}
+  /* ---- 外企分布条 ---- */
+  .mixbox{margin-top:14px;background:#f8fafc;border:1px solid var(--border);border-radius:12px;padding:14px 16px;}
+  .mixtitle{font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px;}
+  .mixbar{display:flex;height:16px;border-radius:99px;overflow:hidden;background:#eef2f7;}
+  .mixbar div{transition:.3s;}
+  .mix-legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:10px;font-size:12.5px;color:var(--muted);}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px;}
+  .d-cn{background:#4f46e5;} .d-hmt{background:#0ea5e9;} .d-foreign{background:#f59e0b;} .d-none{background:#cbd5e1;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>📋 参会名单整理工具</h1>
+    <div class="sub">把各局填报的 Excel 原表拖进来，自动整理为「① 所有嘉宾信息 + ② 确定的参会名单」两个 Sheet 的标准表格，并统计 Sheet② 中的外企数量与占比。全部处理在本机浏览器内完成，数据不会上传。</div>
+  </div>
+
+  <div class="card">
+    <div class="dropzone" id="dropzone">
+      <div style="font-size:40px;">📥</div>
+      <div>点击选择文件，或把 Excel 文件（.xlsx / .xls）拖到这里</div>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none;">
+    <div class="opts">
+      <label><input type="checkbox" id="optDedupe" checked> 跨局去重（同一单位 + 同一嘉宾只保留一次）</label>
+      <label><input type="checkbox" id="optForeign" checked> 外企名称格式化（国别 + 品牌 + 公司/集团）</label>
+      <label><input type="checkbox" id="optRegion" checked> 国别标准化（港澳台 → 中国（香港）等）</label>
+      <label><input type="checkbox" id="optMainOnly"> 第二个 Sheet 仅保留「是否参加主会场 = 是」</label>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="card hidden" id="resultCard">
+    <div class="stats" id="stats"></div>
+    <div class="mixbox" id="mixBox">
+      <div class="mixtitle">🌍 Sheet② 确定的参会名单 — 国别（地区）分布</div>
+      <div class="mixbar" id="mixBar"></div>
+      <div class="mix-legend" id="mixLegend"></div>
+    </div>
+    <div style="margin-top:16px;">
+      <button class="btn" id="downloadBtn">⬇️ 下载整理后的 Excel</button>
+      <button class="btn secondary" id="rerunBtn">用当前选项重新生成</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="reviewCard">
+    <h2>⚠️ 待人工确认 <span class="pill" id="reviewCount">0</span></h2>
+    <div id="reviewList" class="group-list"></div>
+  </div>
+
+  <div class="card hidden" id="groupCard">
+    <h2>🏢 Sheet② 确定的参会名单 — 集团分组预览 <span class="pill" id="groupCount">0</span></h2>
+    <div id="groupList" class="group-list"></div>
+  </div>
+
+  <div class="card hidden" id="previewCard">
+    <h2>👥 Sheet① 所有嘉宾信息 — 预览（前 80 行）</h2>
+    <div class="tblwrap"><table id="previewTable"></table></div>
+  </div>
+
+  <div class="card">
+    <h2>📖 整理规则说明</h2>
+    <ul class="rules">
+      <li><b>解析方式</b>：自动识别表内所有「参会单位名称」表头行及其对应的数据块（支持多个 Sheet、多个局的数据块纵向堆叠），自动展开合并单元格、跳过"例"示范行和空白预留行。</li>
+      <li><b>Sheet① 所有嘉宾信息</b>：9 列标准表头（参会单位名称 / 单位简称 / 国别（地区） / 参会单位类型 / 企业机构性质1 / 企业机构性质2 / 行业领域 / 参会嘉宾姓名 / 嘉宾职务），同一"单位+嘉宾"被多个局重复邀请时只保留一次。企业机构性质1、性质2 两列会自动规范为标准选项（如"3.外资企业"→"4.外资企业"），无法对应标准选项的值清空。</li>
+      <li><b>国别标准化</b>：中国企业写"中国"（不带省市）；香港/台湾/澳门 → 中国（香港）/中国（台湾）/中国（澳门）；外国保留国家名。</li>
+      <li><b>外企名称格式化</b>：国别为外国的单位，若名称已含国别则只补全"公司/集团"后缀（如"日本佳能" → "日本佳能公司"）；若是在华注册的法人实体（名称含"（中国）（深圳）…有限公司"等）则保留全称；其余按"国别 + 品牌 + 公司/集团"生成（如"安永EY" → "英国安永公司"）。所有自动改名的行都会列在"待人工确认"里供核对。</li>
+      <li><b>Sheet② 确定的参会名单</b>：按集团/品牌聚类（如沃尔玛旗下的各法人主体归入"沃尔玛"类），第一列为类别名（同组跨行合并），第二至四列为各细分单位（同一单位多位嘉宾时合并），其后为嘉宾信息；跨局重复的单位+嘉宾同样去重。</li>
+      <li><b>外企统计</b>：上传后自动统计 Sheet② 中国别（地区）为外国的参会单位家数及其占比（中国的港澳台单位单列统计，不计入外企），并在页面上展示国别分布图。</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+/*__CORE_START__*/
+// ================= 核心逻辑（与界面无关） =================
+const GENERIC2 = new Set(('公司,有限,集团,投资,管理,咨询,贸易,商贸,文化,传媒,网络,科技,实业,控股,银行,证券,保险,基金,信托,租赁,担保,会计,律师,国际,世界,中国,大陆,内地,香港,澳门,台湾,美国,日本,英国,德国,法国,深圳,上海,北京,广州,中心,大学,学院,商会,协会,能源,地产,置业,建设,发展,电子,软件,生物,汽车,商务,事务,代表,办事,分行,支行,总部,酒店,餐饮,食品,服装,医院,医疗,健康,教育,传媒,广告,物流,运输,港口,机场,旅游,娱乐,体育,环保,智能,数据,信息,通信,通讯,航空,航天,创新,创业,促进,合伙,商业,工业,零售,批发,电商,金融,期货,资管,融资,征信,审计,税务,人力,猎头,认证,检测,设计,会展,策划,培训,养老,科创,智造,机器,自动,建筑,影视,游戏,饮料,烟草,纺织,医药,药业,环境,电力,电气,材料,化工,钢铁,矿产,农业,渔业,动保,新材,数字,半导体,联合,交流,研究,服务,平台,基地,园区,孵化,石油,国家,煤炭,政府,产业,企业,战略,开发,工程,设备,装备,空间,运营,行政,人事,财务,法务,南方,北方,东方,西部,华南,华东,华北,华西,西南').split(','));
+const GENERIC_MULTI = new Set(['有限公司','股份有限公司','有限责任公司','公司事务','集团有限','投资有限','管理有限','有限合伙','中国有限','商业银行','地区总部','中国公司','有限公司）','资产管理','资产投资','株式会社','金融资产','投资管理','管理有限公司']);
+const COUNTRY_NAMES = new Set('中国,美国,日本,英国,德国,法国,韩国,新加坡,荷兰,瑞士,瑞典,意大利,西班牙,葡萄牙,柬埔寨,泰国,越南,马来西亚,印度尼西亚,印度,澳大利亚,加拿大,墨西哥,巴西,俄罗斯,以色列,阿联酋,沙特,丹麦,挪威,芬兰,爱尔兰,比利时,奥地利,波兰,捷克,匈牙利,希腊,土耳其,埃及,南非,新西兰,菲律宾,巴基斯坦,香港,台湾,澳门'.split(','));
+const REGION_WORDS = ['大中华区','大中华','中国区','中国','内地','大陆','华南','华东','华北','华西','西南','深圳','上海','北京','广州','香港','澳门','台湾','分公司','集团公司'];
+// 中国省市/区划（用于把误填的国别归为"中国"）
+const CN_REGIONS = new Set('深圳,上海,北京,广州,珠海,杭州,南京,苏州,成都,武汉,西安,天津,重庆,青岛,大连,厦门,宁波,佛山,东莞,惠州,长沙,郑州,合肥,福州,济南,沈阳,哈尔滨,昆明,无锡,温州,南通,常州,烟台,泉州,石家庄,太原,长春,南昌,贵阳,南宁,海口,兰州,乌鲁木齐,西宁,银川,拉萨,四川,安徽,广东,浙江,江苏,福建,山东,湖南,湖北,河南,河北,陕西,云南,贵州,广西,海南,甘肃,青海,西藏,新疆,内蒙古,宁夏,辽宁,吉林,山西,江西,黑龙江,前海,深汕,龙岗,宝安,福田,罗湖,南山,龙华,坪山,光明,盐田,大鹏'.split(','));
+// 单位核心名前缀剥离（国别/地区）
+const PREFIX_STRIP = [...REGION_WORDS, ...COUNTRY_NAMES, ...CN_REGIONS];
+// 单位核心名后缀剥离（通用经营字段）
+const SUFFIX_STRIP = ['股份有限公司','有限责任公司','集团有限公司','有限公司','控股集团','集团公司','公司','集团','股份','控股','科技','技术','智能','网络','信息','系统','数字','软件','硬件','实业','产业','发展','传媒','文化','生物','医疗','健康','能源','环境','环保','电力','电气','数据','咨询','管理','贸易','商贸','物流','供应链','银行','证券','保险','基金','资本','投资','国际','代表处','办事处','联络处','研究院','研究所','实验室','工作室','分行','支行','事务所','商会','协会','中心'];
+// 通用职务词（防止通过职务词把不同公司误聚类）
+const TITLE_WORDS = ['董事长','副董事长','总裁','副总裁','总经理','副总经理','常务副总','执行副总','总监','副总监','经理','副经理','合伙人','首席','执行官','执行董事','独立董事','董事','监事','监事长','创始人','联合创始人','主管','专员','助理','高级','资深','会长','副会长','主席','副主席','理事长','常务理事','秘书长','副秘书长','主任','副主任','局长','副局长','处长','副处长','科长','部长','院长','副院长','所长','教授','研究员','博士','代表','负责人','书记','党委','公共','公关','市场','品牌','媒体','投资者','董秘','董办','事务','中国','政府','产业','企业','战略','开发','工程','设备','装备','空间','运营','行政','人事','财务','法务'];
+// 职务中出现这些机构场所词时，不做聚类依据（如"深圳办公室负责人"）
+const OFFICE_WORDS = ['办公室','代表处','办事处','联络处','分公司','子公司','首席代表','驻','代表'];
+// 3字行业通用词（防止"半导体""机器人"等把不同公司链到一起）
+const INDUSTRY3 = new Set(['半导体','机器人','新能源','互联网','制造业','大健康','消费品','快消品','化妆品','生物医药','集成电路','人工智能','天然气','石化','油气','液化']);
+// 结构分隔词：比较单位名时把它们当作分隔符切段，防止跨词碎片误匹配（如"株式会社"→"式会社"）
+const SEPARATOR_WORDS = [...new Set([
+  '股份有限公司','有限责任公司','集团有限公司','株式会社','有限公司','公司事务','资产管理','投资管理','管理咨询',
+  '集团','公司','股份','控股','实业','科技','技术','智能','网络','信息','系统','数字','软件','银行','证券','保险',
+  '基金','信托','租赁','研究院','研究所','代表处','办事处','联络处','事务所','工作室','实验室','商会','协会','学会',
+  '工会','联合会','促进会','研究会','联谊会','校友会','同乡会','总会','理事会','大学','学院','医院','中心','大使馆',
+  '领事馆','分公司','子公司','能源','环境','环保','电力','地产','置业','建设','建筑','物流','咨询','投资','管理',
+  '发展','国际','事务','部门','世界','地区',
+  ...COUNTRY_NAMES, ...CN_REGIONS, ...REGION_WORDS, ...OFFICE_WORDS
+])].sort((a,b)=>b.length-a.length);
+const SEPARATOR_RE = new RegExp(SEPARATOR_WORDS.map(w=>w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|'),'g');
+
+// 按结构词切段，返回有效品牌段
+function segmentsOf(s){
+  s=clean(s).replace(/[（(][^）)]*[）)]/g,'')
+    .replace(/[、，,;；|/／+.＋]/g,' ').replace(/兼/g,' ')
+    .replace(/[\s\u3000]+/g,'');
+  if(!s) return [];
+  const titleSet=TITLE_WORDS;
+  return [...new Set(s.split(SEPARATOR_RE).filter(p=>{
+    if(!p||p.length<2) return false;
+    if(COUNTRY_NAMES.has(p)||CN_REGIONS.has(p)) return false;
+    if(p.length===2&&GENERIC2.has(p)) return false;
+    if(GENERIC_MULTI.has(p)) return false;
+    if(INDUSTRY3.has(p)) return false;
+    if(titleSet.indexOf(p)>=0) return false;
+    if(p.length<=4&&titleSet.some(w=>p.includes(w))) return false;
+    return true;
+  }))];
+}
+const NO_APPEND_SUFFIX = /(公司|集团|银行|株式会社|商会|协会|事务所|基金|研究所|大学|医院|代表处|办事处|联络处|局|署|中心|委员会|大使馆|领事馆|公社|事务|总会|联合会|联谊会|促进会|校友会|同乡会|研究会|学会|工会|理事会)$/;
+// 企业机构性质 标准选项（只能出现这些值）
+const NATURE1_OPTS = ['世界500强（外企）','世界500强（国内企业）','中国500强','外资企业','中央企业','上市公司','独角兽','国有企业','民营企业','其他'];
+const NATURE2_OPTS = ['使领馆','国际经贸机构、商协会','国内经贸机构、商协会','金融、投融资、咨询机构','高校及科研院所','招商载体机构','其他'];
+
+function clean(v){
+  if(v===null||v===undefined) return '';
+  return String(v).replace(/\r|\n|\t/g,'').replace(/ {2,}/g,' ').trim();
+}
+function normalizeHeader(h){ return clean(h).replace(/ /g,''); }
+
+function mapHeader(h){
+  if(h==='序号') return 'seq';
+  if(h.startsWith('参会单位名称')) return 'unit';
+  if(h.startsWith('单位简称')) return 'short';
+  if(h.includes('国别')) return 'country';
+  if(h.startsWith('参会单位名称')) return 'unit';
+  if(h.includes('参会单位')&&h.includes('类型')) return 'type';
+  if(h.startsWith('企业机构性质1')) return 'nature1';
+  if(h.startsWith('企业机构性质2')) return 'nature2';
+  if(h.includes('行业领域')) return 'industry';
+  if(h.includes('嘉宾姓名')) return 'guest';
+  if(h.includes('嘉宾职务')) return 'title';
+  if(h.includes('嘉宾国籍')) return 'guestNat';
+  if(h.includes('是否参加主会场')) return 'mainJoin';
+  if(h.includes('邀请单位')&&!h.includes('联系人')) return 'inviter';
+  return null;
+}
+function buildMap(line){
+  const map={};
+  for(let c=0;c<line.length;c++){
+    const f=mapHeader(normalizeHeader(line[c]));
+    if(f && map[f]===undefined) map[f]=c;
+  }
+  return map;
+}
+
+function expandMerges(ws){
+  if(!ws['!merges']) return;
+  for(const m of ws['!merges']){
+    const cell=ws[XLSX.utils.encode_cell({r:m.s.r,c:m.s.c})];
+    if(!cell||cell.v===undefined||cell.v==='') continue;
+    for(let r=m.s.r;r<=m.e.r;r++){
+      for(let c=m.s.c;c<=m.e.c;c++){
+        if(r===m.s.r&&c===m.s.c) continue;
+        const a2=XLSX.utils.encode_cell({r:r,c:c});
+        if(!ws[a2]) ws[a2]={t:cell.t,v:cell.v};
+      }
+    }
+  }
+}
+
+function getGrid(ws){
+  let ref=ws['!ref']||'A1';
+  const o=XLSX.utils.decode_range(ref);
+  o.e.c=Math.min(o.e.c,63); // 只需前 64 列，避免超大空列拖慢速度
+  return XLSX.utils.sheet_to_json(ws,{header:1,defval:'',blankrows:true,range:XLSX.utils.encode_range(o),raw:false});
+}
+
+function cleanGuest(g){
+  g=clean(g).replace(/[（(]\s*待定\s*[）)]/g,'').trim();
+  return g;
+}
+
+function isJunkGuest(g){
+  if(!g) return true;
+  const s=cleanGuest(g);
+  return !s || s==='待定' || s==='/' || s==='-' || s==='—' || s==='无' || /^X{3,}$/i.test(s) || /^待定/.test(s);
+}
+
+function parseWorkbook(wb){
+  const rows=[];
+  for(const name of wb.SheetNames){
+    const ws=wb.Sheets[name];
+    if(!ws) continue;
+    expandMerges(ws);
+    const grid=getGrid(ws);
+    const headerRows=[];
+    for(let r=0;r<grid.length;r++){
+      const line=grid[r]||[];
+      for(let c=0;c<line.length;c++){
+        if(normalizeHeader(line[c])==='参会单位名称'){ headerRows.push({r:r,map:buildMap(line)}); break; }
+      }
+    }
+    for(let hi=0;hi<headerRows.length;hi++){
+      const h=headerRows[hi];
+      const end=(hi+1<headerRows.length)?headerRows[hi+1].r:grid.length;
+      const map=h.map;
+      if(map.unit===undefined) continue;
+      for(let r=h.r+1;r<end;r++){
+        const line=grid[r]||[];
+        const g=f=>(f!==undefined&&f!==null)?clean(line[f]):'';
+        const seq=g(map.seq),unit=g(map.unit),short=g(map.short),country=g(map.country),
+              type=g(map.type),nature1=g(map.nature1),nature2=g(map.nature2),industry=g(map.industry),
+              guest=cleanGuest(g(map.guest)),title=g(map.title),mainJoin=g(map.mainJoin),inviter=g(map.inviter);
+        // 下一块的标题行（如"市商务局"）：A 列有文字、其余数据列全空 → 结束本块
+        const hasOther=[short,country,type,nature1,nature2,industry,guest,title,mainJoin,inviter].some(x=>x);
+        if(unit===''&&!hasOther&&seq!==''&&isNaN(Number(seq))) break;
+        // 示例行 / 占位脏行
+        if(seq==='例') continue;
+        if(/^X{2,}/i.test(unit)||/^X{3,}$/i.test(guest)||unit.includes('某某')||unit.includes('示例')||guest==='XXX') continue;
+        if(unit===''&&guest===''&&short==='') continue;
+        rows.push({sheet:name,row:r+1,seq,unit,short,country,type,nature1,nature2,industry,guest,title,mainJoin,inviter});
+      }
+    }
+  }
+  return rows;
+}
+
+function normalizeCountry(c){
+  c=clean(c);
+  if(!c) return '';
+  if(CN_REGIONS.has(c)) return '中国';
+  if(c.includes('香港')) return '中国（香港）';
+  if(c.includes('台湾')) return '中国（台湾）';
+  if(c.includes('澳门')) return '中国（澳门）';
+  if(/^(中国|中国大陆|中华人民共和国|内地|国内|大陆)/.test(c)) return '中国';
+  return c;
+}
+
+function isValidCountry(c){
+  if(!c) return false;
+  return COUNTRY_NAMES.has(c)||c.length<=4;
+}
+
+// 把填报的"企业机构性质"规范化为标准选项（如"3.外资企业"→"4.外资企业"，对不上的清空）
+function normalizeNature(v,opts,keywords){
+  v=clean(v);
+  if(!v) return '';
+  const t=v.replace(/^第?\s*\d+\s*[.、，,．:：)]\s*/,'').replace(/[。.\s]+$/,'').trim();
+  if(!t) return '';
+  // 1) 去编号后与标准选项精确/包含匹配
+  let idx=opts.findIndex(o=>o===t);
+  if(idx<0) idx=opts.findIndex(o=>t.includes(o)||o.includes(t)&&t.length>=o.length-1);
+  // 2) 关键词兜底
+  if(idx<0){
+    for(const [re,i] of keywords){ if(re.test(t)){idx=i;break;} }
+  }
+  return idx>=0?(idx+1)+'.'+opts[idx]:'';
+}
+function normalizeNature1(v){
+  const t=clean(v);
+  return normalizeNature(t,NATURE1_OPTS,[
+    [/中国\s*500\s*强/,2],
+    [/500\s*强.*外|外.*500\s*强/,0],
+    [/500\s*强/,1],
+    [/外资/,3],
+    [/中央|央企/,4],
+    [/上市/,5],
+    [/独角兽/,6],
+    [/国有|国企/,7],
+    [/民营/,8],
+    [/其他/,9]
+  ]);
+}
+function normalizeNature2(v){
+  return normalizeNature(v,NATURE2_OPTS,[
+    [/使领馆|领馆|领事/,0],
+    [/国际经贸/,1],
+    [/国内经贸/,2],
+    [/金融|投融资|咨询/,3],
+    [/高校|科研|院所|大学/,4],
+    [/招商载体|载体/,5],
+    [/其他/,6]
+  ]);
+}
+
+function isGenericToken(s){
+  if(!s) return true;
+  if(COUNTRY_NAMES.has(s)) return true;
+  if(s.length===2) return GENERIC2.has(s);
+  if(GENERIC_MULTI.has(s)) return true;
+  // 与国别/中国区划互相包含（如"澳大利"⊂"澳大利亚"、"深圳总"⊃"深圳"）
+  for(const w of COUNTRY_NAMES){ if(w.length>=2&&(w.includes(s)||s.includes(w))) return true; }
+  for(const w of CN_REGIONS){ if(w.includes(s)||s.includes(w)) return true; }
+  if(s.length===3){
+    // 3字词：包含通用二字词或属于行业通用词即视为通用（航空/半导体/发展局/总商会等）
+    if(INDUSTRY3.has(s)) return true;
+    for(let k=0;k+2<=s.length;k++){ if(GENERIC2.has(s.substr(k,2))) return true; }
+  }
+  // 4字以上：仅拒绝包含明确机构复合后缀的（有限公司/办公室/公司事务等）
+  for(const g of GENERIC_MULTI){ if(s.includes(g)) return true; }
+  return false;
+}
+
+function cleanBrand(s){
+  s=clean(s);
+  let changed=true;
+  while(changed&&s.length>2){
+    changed=false;
+    for(const w of REGION_WORDS){
+      if(s.length-w.length>=2&&s.startsWith(w)){s=s.slice(w.length);changed=true;break;}
+      if(s.length-w.length>=2&&s.endsWith(w)){s=s.slice(0,-w.length);changed=true;break;}
+    }
+  }
+  return s;
+}
+
+function isChinaRegistered(name){
+  return /[（(]\s*(中国|香港|澳门|台湾|华北|华东|华南|深圳|上海|北京|广州|珠海|杭州|南京|苏州|成都|武汉|西安|天津|重庆|青岛|大连|厦门|宁波|佛山|东莞|惠州|长沙|郑州|合肥|福州|济南|沈阳|哈尔滨|昆明|无锡|温州|南通|常州|烟台|泉州|石家庄|太原|长春|南昌|贵阳|南宁|海口|兰州|乌鲁木齐)/.test(name)
+    || /(有限公司|股份有限公司|有限责任公司|合伙企业)$/.test(name);
+}
+
+function transformUnitName(unit,country,short,opt){
+  opt=opt||{};
+  if(opt.foreign===false) return {name:unit,flag:null};
+  const c=clean(country);
+  if(!c||c.startsWith('中国')||!isValidCountry(c)) return {name:unit,flag:null};
+  // 外企
+  if(unit.startsWith(c)||unit.includes(c)){
+    if(NO_APPEND_SUFFIX.test(unit)) return {name:unit,flag:null};
+    if(/[）)]$/.test(unit)) return {name:unit,flag:null}; // 名称以括号结尾，不追加后缀
+    return {name:unit+'公司',flag:'auto'};
+  }
+  if(isChinaRegistered(unit)) return {name:unit,flag:null};
+  const brand=cleanBrand(short||'');
+  if(brand&&brand.length>=2&&!isGenericToken(brand)){
+    // 中文单位名不直接替换成纯英文简称（如"中欧科技创新网络"简称"CENTI GROUP"）
+    if(/[\u4e00-\u9fa5]/.test(unit)&&!/[\u4e00-\u9fa5]/.test(brand)) return {name:unit,flag:'manual'};
+    const suffix=NO_APPEND_SUFFIX.test(unit)?'':(unit.includes('集团')?'集团':'公司');
+    if(!suffix) return {name:unit,flag:null};
+    return {name:c+brand+suffix,flag:'auto'};
+  }
+  return {name:unit,flag:'manual'};
+}
+
+function commonSubstring(a,b,minLen){
+  const shorter=a.length<=b.length?a:b,longer=a.length<=b.length?b:a;
+  for(let L=shorter.length;L>=minLen;L--){
+    for(let i=0;i+L<=shorter.length;i++){
+      const sub=shorter.substr(i,L);
+      if(isGenericToken(sub)) continue;
+      if(longer.includes(sub)) return sub;
+    }
+  }
+  return null;
+}
+
+function normMatch(name){
+  return clean(name).replace(/[（(][^）)]*[）)]/g,'').replace(/ /g,'');
+}
+
+// 提取单位"核心名"：剥离前缀国别/地区、后缀通用经营字段，如
+// "深圳市华宇讯科技有限公司" → "华宇讯"；"日本佳能" → "佳能"
+function coreOf(s){
+  s=clean(s).replace(/[\s\u3000]+/g,'').replace(/[（(][^）)]*[）)]/g,'');
+  if(!s) return '';
+  let changed=true;
+  while(changed&&s.length>2){
+    changed=false;
+    for(const w of PREFIX_STRIP){
+      if(s.startsWith(w)&&s.length-w.length>=2){s=s.slice(w.length);changed=true;break;}
+    }
+  }
+  changed=true;
+  while(changed&&s.length>2){
+    changed=false;
+    for(const w of SUFFIX_STRIP){
+      if(s.endsWith(w)&&s.length-w.length>=2){s=s.slice(0,-w.length);changed=true;break;}
+    }
+  }
+  return s;
+}
+
+function isTitleToken(t){
+  if(!t) return true;
+  for(const w of TITLE_WORDS){
+    if(w.includes(t)||t.includes(w)) return true;
+  }
+  // 含办公/驻外机构词（如"圳办公室""华西代表"）
+  for(const w of OFFICE_WORDS){
+    if(t.includes(w)) return true;
+  }
+  // 含地区/国别词或通用二字词（如"华南区总""大中华区"）
+  for(const w of REGION_WORDS){ if(w.length>=2&&t.includes(w)) return true; }
+  for(const w of CN_REGIONS){ if(w.length>=2&&t.includes(w)) return true; }
+  for(const w of COUNTRY_NAMES){ if(w.length>=2&&t.includes(w)) return true; }
+  return isGenericToken(t);
+}
+
+function linkToken(a,b){
+  const consider=t=>{
+    if(!t||t.length<2) return;
+    if(isGenericToken(t)) return;
+    if(!/[\u4e00-\u9fa5]/.test(t)&&t.length<4) return; // 纯英文碎片需≥4
+    if(!best||t.length>best.length) best=t;
+  };
+  let best=null;
+  // 1) 名称分段比较（通用词为分隔符，防止跨词碎片）
+  const sa=[...new Set([...segmentsOf(a.short),...segmentsOf(a.origName)])];
+  const sb=[...new Set([...segmentsOf(b.short),...segmentsOf(b.origName)])];
+  for(const x of sa)for(const y of sb){
+    if(x===y) consider(x);
+    else if(x.includes(y)) consider(y);
+    else if(y.includes(x)) consider(x);
+    // 不同段之间不做自由碎片匹配，防止跨词误链
+  }
+  if(best) return best;
+  // 2) 核心名包含（剥离后缀后，如"中建"⊂"中建科工"）
+  const ca=[...new Set([coreOf(a.short),coreOf(a.origName)].filter(x=>x.length>=2))];
+  const cb=[...new Set([coreOf(b.short),coreOf(b.origName)].filter(x=>x.length>=2))];
+  for(const x of ca)for(const y of cb){
+    if(x===y) consider(x);
+    else if(x.includes(y)) consider(y);
+    else if(y.includes(x)) consider(x);
+  }
+  if(best) return best;
+  // 3) 职务分段比较（严格过滤通用职务词）
+  for(const x of a.guestTitles)for(const y of b.guestTitles){
+    const xs=segmentsOf(x),ys=segmentsOf(y);
+    for(const p of xs)for(const q of ys){
+      if(p===q&&p.length>=2&&!isTitleToken(p)) consider(p);
+      else if(p.includes(q)&&q.length>=3&&!isTitleToken(q)) consider(q);
+      else if(q.includes(p)&&p.length>=3&&!isTitleToken(p)) consider(p);
+      else{
+        const t=commonSubstring(p,q,4);
+        if(t&&t.length>=4&&!isGenericToken(t)&&!isTitleToken(t)) consider(t);
+      }
+    }
+    if(best) return best;
+  }
+  return best;
+}
+
+function multiLCS(strs){
+  if(!strs||strs.length<2) return null;
+  let shortest=strs[0];
+  for(const s of strs) if(s.length<shortest.length) shortest=s;
+  for(let L=shortest.length;L>=2;L--){
+    for(let i=0;i+L<=shortest.length;i++){
+      const sub=shortest.substr(i,L);
+      if(isGenericToken(sub)) continue;
+      if(strs.every(s=>s.includes(sub))) return sub;
+    }
+  }
+  return null;
+}
+
+function clusterEntities(ents){
+  const n=ents.length;
+  const parent=Array.from({length:n},(_,i)=>i);
+  const find=i=>parent[i]===i?i:(parent[i]=find(parent[i]));
+  const union=(i,j)=>{const ri=find(i),rj=find(j);if(ri!==rj)parent[Math.max(ri,rj)]=Math.min(ri,rj);};
+  // 2-gram 倒排索引（基于分段后的品牌段，避免通用词产生垃圾候选对）
+  const idx=new Map();
+  for(let i=0;i<n;i++){
+    const e=ents[i];
+    const strs=[...segmentsOf(e.short),...segmentsOf(e.origName),...e.guestTitles].filter(s=>s.length>=2);
+    const gs=new Set();
+    for(const s of strs) for(let k=0;k+2<=s.length;k++){
+      const g=s.substr(k,2);
+      if(!GENERIC2.has(g)) gs.add(g);
+    }
+    for(const g of gs){
+      if(!idx.has(g)) idx.set(g,[]);
+      idx.get(g).push(i);
+    }
+  }
+  const cand=new Set();
+  for(const [,arr] of idx){
+    if(arr.length>40) continue;
+    for(let a=0;a<arr.length;a++)for(let b=a+1;b<arr.length;b++){
+      const key=Math.min(arr[a],arr[b])+'_'+Math.max(arr[a],arr[b]);
+      cand.add(key);
+    }
+  }
+  for(const key of cand){
+    const [a,b]=key.split('_').map(Number);
+    if(find(a)!==find(b)&&linkToken(ents[a],ents[b])) union(a,b);
+  }
+  const groupsMap=new Map();
+  for(let i=0;i<n;i++){
+    const r=find(i);
+    if(!groupsMap.has(r)) groupsMap.set(r,[]);
+    groupsMap.get(r).push(ents[i]);
+  }
+  return [...groupsMap.values()];
+}
+
+function groupBrand(gents){
+  const shorts=gents.map(e=>coreOf(e.short)).filter(s=>s.length>=2);
+  if(shorts.length>=2){
+    const b=multiLCS(shorts);
+    if(b&&b.length>=2&&!isGenericToken(b)) return b;
+  }
+  // 单实体组：轻度清洗（只剥地区前后缀），避免 coreOf 把"中国德国商会"剥成"商会"
+  const raw=clean(gents.map(e=>e.short).find(Boolean)||'');
+  if(raw){
+    const cb=cleanBrand(raw);
+    if(cb.length>=2&&!isGenericToken(cb)) return cb;
+    return raw;
+  }
+  return gents[0].name;
+}
+
+function buildAll(rows,opt){
+  const review=[];let autoRename=0;
+  const recs=rows.map(r=>({...r,countryN:opt.fixRegion?normalizeCountry(r.country):clean(r.country)}));
+  // ---- 实体（单位）级归并 ----
+  const entMap=new Map();
+  for(const r of recs){
+    if(!r.unit) continue;
+    if(opt.mainOnly&&r.mainJoin&&r.mainJoin!=='是') continue;
+    const key=r.unit.replace(/[\s\u3000]+/g,'');
+    const t=transformUnitName(r.unit,r.countryN,r.short,opt);
+    let e=entMap.get(key);
+    if(!e){
+      e={origName:r.unit,name:t.flag==='manual'?r.unit:t.name,short:'',country:'',
+         guests:new Map(),guestTitles:new Set(),flags:new Set()};
+      entMap.set(key,e);
+    }
+    if(t.flag==='auto'){
+      if(!e.flags.has('auto')){autoRename++;e.flags.add('auto');
+        review.push({type:'🤖 自动改名（请核对）',from:r.unit,to:t.name,where:r.sheet+' 第'+r.row+'行'});}
+      e.name=t.name;
+    }
+    if(t.flag==='manual'){
+      if(!e.flags.has('manual')){e.flags.add('manual');
+        review.push({type:'✍️ 名称待人工确认',from:r.unit,to:'（未能自动生成"国别+品牌+公司"格式）',where:r.sheet+' 第'+r.row+'行'});}
+    }
+    if(!e.short)e.short=r.short;
+    if(!e.country)e.country=r.countryN;
+    if(r.guest&&!isJunkGuest(r.guest)){
+      e.guestTitles.add(r.title);
+      if(!e.guests.has(r.guest)) e.guests.set(r.guest,{title:r.title});
+    }
+  }
+  // ---- Sheet①：所有嘉宾信息 ----
+  const S1_HEADER=['参会单位名称','单位简称（打名牌）','国别（地区）','参会单位类型','企业机构性质1（意向投资企业必填项）','企业机构性质2（招商合作机构必填项）','行业领域','参会嘉宾姓名','嘉宾职务'];
+  const seen=new Set();let guestRowCount=0;
+  const s1=[S1_HEADER];
+  for(const r of recs){
+    if(!r.unit||!r.guest||isJunkGuest(r.guest)) continue;
+    guestRowCount++;
+    const t=transformUnitName(r.unit,r.countryN,r.short,opt);
+    const n1=normalizeNature1(r.nature1),n2=normalizeNature2(r.nature2);
+    const key=[t.name,r.short,r.countryN,r.type,n1,n2,r.industry,r.guest,r.title].join('|');
+    if(opt.dedupe&&seen.has(key)) continue;
+    seen.add(key);
+    s1.push([t.name,r.short,r.countryN,r.type,n1,n2,r.industry,r.guest,r.title]);
+  }
+  // ---- Sheet②：确定的参会名单（按集团/品牌聚类）----
+  const ents=[...entMap.values()];
+  const groups=clusterEntities(ents)
+    .map(g=>({brand:groupBrand(g),ents:g}))
+    .sort((a,b)=>a.brand.localeCompare(b.brand,'zh-CN'));
+  for(const g of groups) g.ents.sort((a,b)=>a.name.localeCompare(b.name,'zh-CN'));
+  const S2_HEADER=['类别（集团/品牌）','参会单位名称','单位简称（打名牌）','国别（地区）','参会嘉宾姓名','嘉宾职务'];
+  const s2=[S2_HEADER];const merges=[];
+  for(const g of groups){
+    const gStart=s2.length; // aoa 下标 → sheet 行号 = 下标（表头占第1行）
+    for(const e of g.ents){
+      const eStart=s2.length;
+      const guests=[...e.guests.entries()];
+      if(guests.length===0){
+        s2.push([g.brand,e.name,e.short,e.country,'','']);
+      }else{
+        for(const [gn,gt] of guests) s2.push([g.brand,e.name,e.short,e.country,gn,gt.title||'']);
+      }
+      if(s2.length-eStart>1){
+        for(const c of [1,2,3]) merges.push({s:{r:eStart,c:c},e:{r:s2.length-1,c:c}});
+      }
+    }
+    if(s2.length-gStart>1) merges.push({s:{r:gStart,c:0},e:{r:s2.length-1,c:0}});
+  }
+  // ---- Sheet② 外企统计（按国别（地区）划分） ----
+  let chinaU=0,hkmtwU=0,foreignU=0,noC=0;
+  for(const e of ents){
+    const c=(e.country||'').trim();
+    if(!c){noC++;continue;}
+    if(c==='中国'){chinaU++;continue;}
+    if(c.startsWith('中国（')){hkmtwU++;continue;}
+    foreignU++;
+  }
+  const stats={
+    parsedRows:rows.length,
+    guestRows:guestRowCount,
+    deduped:s1.length-1,
+    dedupRemoved:opt.dedupe?guestRowCount-(s1.length-1):0,
+    units:ents.length,
+    groups:groups.length,
+    autoRename:autoRename,
+    manual:review.filter(x=>x.type.includes('人工')).length,
+    chinaU:chinaU,hkmtwU:hkmtwU,foreignU:foreignU,noC:noC
+  };
+  return {s1,s2Aoa:s2,merges,stats,review,groups};
+}
+/*__CORE_END__*/
+
+// ================= 界面逻辑 =================
+let lastRows=null,lastResult=null;
+const $=id=>document.getElementById(id);
+
+function setStatus(msg,err){
+  const el=$('status');el.textContent=msg||'';el.className='status'+(err?' err':'');
+}
+
+function handleFile(file){
+  if(!file) return;
+  if(typeof XLSX==='undefined'){setStatus('未加载 Excel 解析库，请检查网络后刷新页面重试。',true);return;}
+  setStatus('正在读取 '+file.name+' …');
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      lastRows=parseWorkbook(wb);
+      if(lastRows.length===0){setStatus('未在文件中识别到"参会单位名称"表头或数据行，请确认文件格式。',true);return;}
+      run();
+      setStatus('✅ 解析完成：共识别 '+lastRows.length+' 行数据。');
+    }catch(err){
+      console.error(err);
+      setStatus('解析失败：'+err.message,true);
+    }
+  };
+  reader.onerror=()=>setStatus('文件读取失败，请重试。',true);
+  reader.readAsArrayBuffer(file);
+}
+
+function getOptions(){
+  return {
+    dedupe:$('optDedupe').checked,
+    foreign:$('optForeign').checked,
+    fixRegion:$('optRegion').checked,
+    mainOnly:$('optMainOnly').checked
+  };
+}
+
+function run(){
+  const opt=getOptions();
+  lastResult=buildAll(lastRows,opt);
+  render(opt);
+}
+
+function render(opt){
+  const st=lastResult.stats;
+  $('resultCard').classList.remove('hidden');
+  const pct=st.units?Math.round(st.foreignU/st.units*1000)/10:0;
+  const pctCN=st.units?Math.round((st.chinaU+st.hkmtwU)/st.units*1000)/10:0;
+  $('stats').innerHTML=[
+    ['参会单位（Sheet②）',st.units],['🌍 外企家数（Sheet②）',st.foreignU,'foreign'],
+    ['外企占比',pct+'%','foreign'],['嘉宾信息（Sheet①）',st.deduped],
+    ['集团/品牌分组',st.groups],['自动改名待核对',st.autoRename]
+  ].map(([l,v,cls])=>'<div class="stat'+(cls?' '+cls:'')+'"><div class="num">'+v+'</div><div class="lbl">'+l+'</div></div>').join('');
+
+  // 国别（地区）分布条
+  const segs=[
+    ['中国',st.chinaU,'#4f46e5','d-cn'],
+    ['中国（香港/澳门/台湾）',st.hkmtwU,'#0ea5e9','d-hmt'],
+    ['外企（外国）',st.foreignU,'#f59e0b','d-foreign'],
+    ['国别未填',st.noC,'#cbd5e1','d-none']
+  ];
+  const total=st.units||1;
+  $('mixBar').innerHTML=segs.map(([l,v,color])=>
+    v>0?'<div style="width:'+(v/total*100)+'%;background:'+color+';" title="'+l+'：'+v+'家"></div>':''
+  ).join('');
+  $('mixLegend').innerHTML=segs.map(([l,v,color,cls])=>
+    '<span><span class="dot '+cls+'"></span>'+l+'：<b>'+v+'</b> 家（'+(Math.round(v/total*1000)/10)+'%）</span>'
+  ).join('')+'<span>其中外企占比 <b style="color:#d97706">'+pct+'%</b>，中国境内（含港澳台）占比 <b style="color:var(--primary)">'+pctCN+'%</b></span>';
+
+  // 待人工确认
+  const review=lastResult.review;
+  $('reviewCard').classList.toggle('hidden',review.length===0);
+  $('reviewCount').textContent=review.length;
+  $('reviewList').innerHTML=review.slice(0,100).map(x=>
+    '<div class="review-item"><b>'+x.type+'</b>　'+x.from+(x.to&&x.to!==x.from?' → <b style="color:var(--ok)">'+x.to+'</b>':'')+'<span style="color:var(--muted)">（'+x.where+'）</span></div>'
+  ).join('')+(review.length>100?'<div style="color:var(--muted)">… 其余 '+ (review.length-100) +' 条见导出核对</div>':'');
+
+  // 集团分组预览
+  const groups=lastResult.groups;
+  $('groupCard').classList.remove('hidden');
+  $('groupCount').textContent=groups.length;
+  $('groupList').innerHTML=groups.slice(0,60).map(g=>
+    '<div class="group-item"><span class="group-brand">'+g.brand+'</span><span class="group-ents">'+
+    g.ents.map(e=>e.name+(e.guests.size?'（'+e.guests.size+'人）':'（嘉宾待定）')).join('；')+'</span></div>'
+  ).join('')+(groups.length>60?'<div style="color:var(--muted);padding:8px">… 其余 '+ (groups.length-60) +' 组见导出文件</div>':'');
+
+  // Sheet① 预览
+  const s1=lastResult.s1;
+  const rowsToShow=s1.slice(0,81);
+  let html='<thead><tr>'+s1[0].map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>';
+  for(let i=1;i<rowsToShow.length;i++){
+    html+='<tr>'+rowsToShow[i].map(c=>'<td>'+(c||'')+'</td>').join('')+'</tr>';
+  }
+  html+='</tbody>';
+  $('previewTable').innerHTML=html;
+  $('previewCard').classList.remove('hidden');
+}
+
+function download(){
+  if(!lastResult) return;
+  const wb=XLSX.utils.book_new();
+  const ws1=XLSX.utils.aoa_to_sheet(lastResult.s1);
+  ws1['!cols']=w1(lastResult.s1[0]);
+  XLSX.utils.book_append_sheet(wb,ws1,'所有嘉宾信息');
+  const ws2=XLSX.utils.aoa_to_sheet(lastResult.s2Aoa);
+  ws2['!cols']=w2();
+  if(lastResult.merges.length) ws2['!merges']=lastResult.merges;
+  XLSX.utils.book_append_sheet(wb,ws2,'确定的参会名单');
+  XLSX.writeFile(wb,'整理后的参会名单.xlsx');
+}
+function w1(){
+  return [36,16,12,14,26,26,20,14,30].map(x=>({wch:x}));
+}
+function w2(){return [16,36,16,12,14,30].map(x=>({wch:x}));}
+
+// 事件绑定
+const dz=$('dropzone'),fi=$('fileInput');
+dz.addEventListener('click',()=>fi.click());
+fi.addEventListener('change',()=>handleFile(fi.files[0]));
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('hover');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('hover'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('hover');handleFile(e.dataTransfer.files[0]);});
+$('downloadBtn').addEventListener('click',download);
+$('rerunBtn').addEventListener('click',()=>{if(lastRows)run();});
+</script>
+</body>
+</html>
